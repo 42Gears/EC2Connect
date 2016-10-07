@@ -86,7 +86,7 @@ namespace EC2Connect.Panels
                 }
                 catch (AmazonEC2Exception ex)
                 {
-                    MessageBox.Show(ex.Message);
+                    Dispatcher.BeginInvoke(new Action(() => MessageBox.Show(ex.Message)));
                 }
             }
         }
