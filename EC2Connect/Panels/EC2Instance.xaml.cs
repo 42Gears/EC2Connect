@@ -61,16 +61,16 @@ namespace EC2Connect.Panels
                     List<InstanceModel> allInstances = new List<InstanceModel>();
 
                     var reservations = EC2Client.DescribeInstances().Reservations;
-                    if(reservations!=null && reservations.Count > 0)
+                    if (reservations != null && reservations.Count > 0)
                     {
-                        foreach(Reservation reservation in reservations)
+                        foreach (Reservation reservation in reservations)
                         {
                             var instances = reservation.Instances;
-                            if(instances!=null && instances.Count > 0)
+                            if (instances != null && instances.Count > 0)
                             {
-                                foreach(Instance instance in instances)
+                                foreach (Instance instance in instances)
                                 {
-                                    if(!string.IsNullOrWhiteSpace(instance.PublicIpAddress))
+                                    if (!string.IsNullOrWhiteSpace(instance.PublicIpAddress))
                                     {
                                         allInstances.Add(new InstanceModel(instance));
                                     }
@@ -79,14 +79,14 @@ namespace EC2Connect.Panels
                         }
                     }
 
-                    if(allInstances.Count > 0)
+                    if (allInstances.Count > 0)
                     {
                         Dispatcher.BeginInvoke(new Action(() => LoadGrid(allInstances)));
                     }
                 }
-                catch (AmazonEC2Exception ex)
+                catch (Exception ex)
                 {
-                    Dispatcher.BeginInvoke(new Action(() => MessageBox.Show(ex.Message)));
+                    Dispatcher.BeginInvoke(new Action(() => MessageBox.Show(ex.Message, ex.GetType().FullName)));
                 }
             }
         }
@@ -110,15 +110,30 @@ namespace EC2Connect.Panels
 
         private void Rdp_Async(object instance)
         {
-            InstanceModel item = instance as InstanceModel;
-            if (item != null && EC2Client != null)
+            try
             {
-                Utility.AllowPort(EC2Client, item.AmazonInstance, Utility.PublicIp, "TCP", 3389);
+                InstanceModel item = instance as InstanceModel;
+                if (item != null && EC2Client != null)
+                {
+                    Utility.AllowPort(EC2Client, item.AmazonInstance, Utility.PublicIPs, "TCP", 3389);
 
-                // TODO: FixMe
-                Dispatcher.BeginInvoke((Action)(() => {
-                    Utility.DoRDP(EC2Client, item.AmazonInstance);
-                }));
+                    // TODO: FixMe
+                    Dispatcher.BeginInvoke((Action)(() =>
+                    {
+                        try
+                        {
+                            Utility.DoRDP(EC2Client, item.AmazonInstance);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex.Message);
+                        }
+                    }));
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
             }
         }
 
@@ -127,7 +142,7 @@ namespace EC2Connect.Panels
             InstanceModel item = InstanceGrid.SelectedItem as InstanceModel;
             if (item != null && EC2Client != null)
             {
-                Utility.AllowPort(EC2Client, item.AmazonInstance, Utility.PublicIp, "TCP", 22);
+                Utility.AllowPort(EC2Client, item.AmazonInstance, Utility.PublicIPs, "TCP", 22);
                 Utility.DoSSH(item.AmazonInstance);
             }
         }
@@ -137,7 +152,7 @@ namespace EC2Connect.Panels
             InstanceModel item = InstanceGrid.SelectedItem as InstanceModel;
             if (item != null && EC2Client != null)
             {
-                Utility.AllowPort(EC2Client, item.AmazonInstance, Utility.PublicIp, "TCP", 22);
+                Utility.AllowPort(EC2Client, item.AmazonInstance, Utility.PublicIPs, "TCP", 22);
                 Utility.DoSCP(item.AmazonInstance);
             }
         }

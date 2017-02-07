@@ -69,7 +69,7 @@ namespace EC2Connect.Popup
         {
             if (Port > 0 && !string.IsNullOrWhiteSpace(Type) && EC2Client != null && AmazonInstance != null)
             {
-                Utility.AllowPort(EC2Client, AmazonInstance, Utility.PublicIp, Type, Port);
+                Utility.AllowPort(EC2Client, AmazonInstance, Utility.PublicIPs, Type, Port);
             }
             DialogResult = true;
         }

@@ -172,7 +172,6 @@
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>
-    <Resource Include="Image\EC2.ico" />
     <Resource Include="EC2.ico" />
     <Content Include="Library\AWSSDK.Core.dll" />
     <Content Include="Library\AWSSDK.EC2.dll" />

@@ -40,13 +40,31 @@ namespace EC2Connect
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             HeadBanner.ProfileChangedListeners += MainGrid.LoadProfile;
-            
-            new Thread(() =>
-            {
-                // Load the public ip address in background //
-                (Utility.PublicIp ?? string.Empty).ToString();
+            Utility.PublicIPChangedListeners += Utility_PublicIPChangedListeners;
+            Thread ipWatcher = new Thread(Utility.PublicIpWatcher);
+            ipWatcher.IsBackground = true;
+            ipWatcher.Start();
+        }
 
-            }).Start();
+        private void Utility_PublicIPChangedListeners()
+        {
+            if (Utility.PublicIPs != null && Utility.PublicIPs.Length > 0)
+            {
+                string ips = string.Join("\t,\t", Utility.PublicIPs);
+                if (!string.IsNullOrWhiteSpace(ips))
+                {
+                    Dispatcher.BeginInvoke(new Action(() => IpAddress.Text = ips));
+
+                }
+            }
+        }
+
+        private void IpAddress_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(IpAddress.Text))
+            {
+                Clipboard.SetText(IpAddress.Text);
+            }
         }
     }
 }

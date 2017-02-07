@@ -37,26 +37,33 @@ namespace EC2Connect.Code
             }
         }
 
-        internal static void AllowPort(IAmazonEC2 ec2Client, Instance instance, string publicIp, string proto, int port)
+        internal static void AllowPort(IAmazonEC2 ec2Client, Instance instance, string[] publicIPs, string proto, int port)
         {
-            AuthorizeSecurityGroupIngressRequest ingressRequest = new AuthorizeSecurityGroupIngressRequest();
-            ingressRequest.GroupId = instance.SecurityGroups[0].GroupId;
-            ingressRequest.IpPermissions.Add(new IpPermission()
+            if (publicIPs != null && publicIPs.Length > 0)
             {
-                IpProtocol = proto,
-                FromPort = port,
-                ToPort = port,
-                IpRanges = new List<string>() { publicIp.Trim() + "/32" }
-            });
+                AuthorizeSecurityGroupIngressRequest ingressRequest = new AuthorizeSecurityGroupIngressRequest();
+                ingressRequest.GroupId = instance.SecurityGroups[0].GroupId;
 
-            try
-            {
-                var res = ec2Client.AuthorizeSecurityGroupIngress(ingressRequest);
-                Console.WriteLine("Allowing Port " + port + " for IP Address " + publicIp.Trim() + "/32");
-            }
-            catch
-            {
-                // Ignore //
+                publicIPs.ToList().ForEach(x =>
+                {
+                    ingressRequest.IpPermissions.Add(new IpPermission()
+                    {
+                        IpProtocol = proto,
+                        FromPort = port,
+                        ToPort = port,
+                        IpRanges = new List<string>() { x.Trim() + "/32" }
+                    });
+                });
+
+                try
+                {
+                    var res = ec2Client.AuthorizeSecurityGroupIngress(ingressRequest);
+                    Console.WriteLine("Allowing Port " + port + " for IP Address " + string.Join(",", publicIPs));
+                }
+                catch
+                {
+                    // Ignore //
+                }
             }
         }
 
@@ -112,7 +119,7 @@ namespace EC2Connect.Code
         private static string GetPasswordFromUserOrStore(string instanceId, string dialogMessage)
         {
             string password = KeyStore.GetPassword(instanceId);
-            if(string.IsNullOrWhiteSpace(password))
+            if (string.IsNullOrWhiteSpace(password))
             {
                 AskPassword dialogue = new AskPassword();
                 dialogue.ShowInTaskbar = false;
@@ -177,51 +184,78 @@ namespace EC2Connect.Code
                  "http://ipinfo.io/ip", "http://canihazip.com/s",
                  "http://bot.whatismyipaddress.com" ,"http://icanhazip.com" };
 
-        private static string _publicIp = null;
-        public static string PublicIp
+        private static string[] _publicIPs = null;
+        public static string[] PublicIPs
         {
             get
             {
-                if (_publicIp == null)
-                {
-                    _publicIp = TakeFirstResponse(IpProviders);
-                }
-                return _publicIp;
+                return _publicIPs;
             }
         }
 
-        private static string TakeFirstResponse(string[] urls)
+        private static string[] GetAllPublicIp(string[] urls)
         {
             System.Net.ServicePointManager.DefaultConnectionLimit = urls.Length * 2;
-            IpResetEvent resetEvent = new IpResetEvent();
-            new Thread(() =>
+            SortedSet<string> allIps = new SortedSet<string>();
+            Parallel.ForEach(urls, x =>
             {
-                urls.AsParallel().ForAll(async (x) =>
+                string externalip = FetchPublicIp(x);
+                if (!string.IsNullOrWhiteSpace(externalip))
                 {
-                    try
+                    allIps.Add(externalip);
+                }
+            });
+            return allIps.ToArray();
+        }
+
+        internal static void PublicIpWatcher()
+        {
+            while(true)
+            {
+                try
+                {
+                    string[] newIPs = GetAllPublicIp(IpProviders);
+                    if (newIPs != null && newIPs.Length > 0)
                     {
-                        string externalip = await FetchPublicIp(x);
-                        if (!string.IsNullOrWhiteSpace(externalip))
+                        if (_publicIPs == null || _publicIPs.Length == 0)
                         {
-                            System.Net.IPAddress ip;
-                            if (System.Net.IPAddress.TryParse(externalip.Trim(), out ip))
+                            OnPublicIPsUpdated(newIPs);
+                        }
+                        else
+                        {
+                            SortedSet<string> newSet = new SortedSet<string>(_publicIPs);
+                            newSet.UnionWith(newIPs);
+                            if (newSet.Count > _publicIPs.Length)
                             {
-                                resetEvent.Result = externalip.Trim();
-                                resetEvent.Set();
+                                OnPublicIPsUpdated(newSet.ToArray());
                             }
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine(ex);
-                    }
-                });
-            }).Start();
-            resetEvent.WaitOne(30000);
-            return resetEvent.Result;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+                Thread.Sleep(1024 * 64 * 4);    // ~ 4 minutes
+            }
         }
 
-        private static async Task<string> FetchPublicIp(string providerUrl)
+        public delegate void OnPublicIPChanged();
+        public static event OnPublicIPChanged PublicIPChangedListeners;
+
+        private static void OnPublicIPsUpdated(string[] newPublicIps)
+        {
+            if(newPublicIps!=null && newPublicIps.Length > 0)
+            {
+                _publicIPs = newPublicIps;
+                if(PublicIPChangedListeners!=null)
+                {
+                    PublicIPChangedListeners();
+                }
+            }
+        }
+
+        private static string FetchPublicIp(string providerUrl)
         {
             string externalip;
             try
@@ -229,7 +263,7 @@ namespace EC2Connect.Code
                 using (WebClient httpClient = new WebClient())
                 {
                     httpClient.Proxy = null;
-                    externalip = await httpClient.DownloadStringTaskAsync(providerUrl);
+                    externalip = httpClient.DownloadStringTaskAsync(providerUrl).Result;
                 }
             }
             catch (Exception ex)
@@ -269,7 +303,7 @@ namespace EC2Connect.Code
             }
 
             string userName = LinuxUser.GetUser(instance.InstanceId);
-            if(string.IsNullOrWhiteSpace(userName))
+            if (string.IsNullOrWhiteSpace(userName))
             {
                 GetUserDialogue dialogue = new GetUserDialogue();
                 dialogue.ShowInTaskbar = false;
@@ -288,10 +322,10 @@ namespace EC2Connect.Code
                     }
                 }
             }
-            if(!string.IsNullOrWhiteSpace(userName))
+            if (!string.IsNullOrWhiteSpace(userName))
             {
                 string login = userName + "@" + instance.PublicDnsName;
-                if(command.Equals("SSH"))
+                if (command.Equals("SSH"))
                 {
                     ExecuteCommandSync("putty.exe", "-ssh " + login + " -i " + PrivateKey, true);
                 }
