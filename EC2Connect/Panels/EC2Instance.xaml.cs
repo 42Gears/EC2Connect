@@ -16,6 +16,7 @@ using EC2Connect.Code;
 using EC2Connect.Popup;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -58,6 +59,9 @@ namespace EC2Connect.Panels
                     AWSCredentials credentails = ProfileManager.GetAWSCredentials(profileName);
                     EC2Client = new AmazonEC2Client(credentails, RegionEndpoint.USEast1);
 
+
+                    Dictionary<string, string> staticIPs = GetStaticIps(EC2Client);
+
                     List<InstanceModel> allInstances = new List<InstanceModel>();
 
                     var reservations = EC2Client.DescribeInstances().Reservations;
@@ -72,6 +76,11 @@ namespace EC2Connect.Panels
                                 {
                                     if (!string.IsNullOrWhiteSpace(instance.PublicIpAddress))
                                     {
+                                        allInstances.Add(new InstanceModel(instance));
+                                    }
+                                    else if(staticIPs.ContainsKey(instance.InstanceId))
+                                    {
+                                        instance.PublicIpAddress = staticIPs[instance.InstanceId];
                                         allInstances.Add(new InstanceModel(instance));
                                     }
                                 }
@@ -89,6 +98,23 @@ namespace EC2Connect.Panels
                     Dispatcher.BeginInvoke(new Action(() => MessageBox.Show(ex.Message, ex.GetType().FullName)));
                 }
             }
+        }
+
+        private Dictionary<string, string> GetStaticIps(AmazonEC2Client eC2Client)
+        {
+            List <Address> addresses =  eC2Client.DescribeAddresses().Addresses;
+            Dictionary<string, string> staticIPs = new Dictionary<string, string>();
+            if (addresses!=null && addresses.Count>0)
+            {
+                foreach(Address address in addresses)
+                {
+                    if(!string.IsNullOrWhiteSpace(address.PublicIp) && !string.IsNullOrWhiteSpace(address.InstanceId))
+                    {
+                        staticIPs.Add(address.InstanceId, address.PublicIp);
+                    }
+                }
+            }
+            return staticIPs;
         }
 
         private void LoadGrid(List<InstanceModel> instances)

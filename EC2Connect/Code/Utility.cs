@@ -41,29 +41,52 @@ namespace EC2Connect.Code
         {
             if (publicIPs != null && publicIPs.Length > 0)
             {
-                AuthorizeSecurityGroupIngressRequest ingressRequest = new AuthorizeSecurityGroupIngressRequest();
-                ingressRequest.GroupId = instance.SecurityGroups[0].GroupId;
-
-                publicIPs.ToList().ForEach(x =>
+                foreach(string publicIP in publicIPs)
                 {
+                    AuthorizeSecurityGroupIngressRequest ingressRequest = new AuthorizeSecurityGroupIngressRequest();
+                    ingressRequest.GroupId = instance.SecurityGroups[0].GroupId;
                     ingressRequest.IpPermissions.Add(new IpPermission()
                     {
                         IpProtocol = proto,
                         FromPort = port,
                         ToPort = port,
-                        IpRanges = new List<string>() { x.Trim() + "/32" }
+                        IpRanges = new List<string>() { publicIP.Trim() + "/32" }
                     });
-                });
 
-                try
-                {
-                    var res = ec2Client.AuthorizeSecurityGroupIngress(ingressRequest);
-                    Console.WriteLine("Allowing Port " + port + " for IP Address " + string.Join(",", publicIPs));
+                    try
+                    {
+                        var res = ec2Client.AuthorizeSecurityGroupIngress(ingressRequest);
+                        Console.WriteLine("Allowing Port " + port + " for IP Address " + publicIP.Trim() + "/32");
+                    }
+                    catch
+                    {
+                        // Ignore //
+                    }
                 }
-                catch
-                {
-                    // Ignore //
-                }
+                //AuthorizeSecurityGroupIngressRequest ingressRequest = new AuthorizeSecurityGroupIngressRequest();
+                //ingressRequest.GroupId = instance.SecurityGroups[0].GroupId;
+
+                //publicIPs.ToList().ForEach(x =>
+                //{
+                //    ingressRequest.IpPermissions.Add(new IpPermission()
+                //    {
+                //        IpProtocol = proto,
+                //        FromPort = port,
+                //        ToPort = port,
+                //        IpRanges = new List<string>() { x.Trim() + "/32" }
+                //    });
+                //});
+
+                //try
+                //{
+                //    var res = ec2Client.AuthorizeSecurityGroupIngress(ingressRequest);
+                //    Console.WriteLine("Allowing Port " + port + " for IP Address " + string.Join(",", publicIPs));
+                //}
+                //catch(Exception ex)
+                //{
+                //    Debug.WriteLine(ex.Message);
+                //    // Ignore //
+                //}
             }
         }
 
@@ -324,7 +347,7 @@ namespace EC2Connect.Code
             }
             if (!string.IsNullOrWhiteSpace(userName))
             {
-                string login = userName + "@" + instance.PublicDnsName;
+                string login = userName + "@" + instance.PublicIpAddress;
                 if (command.Equals("SSH"))
                 {
                     ExecuteCommandSync("putty.exe", "-ssh " + login + " -i " + PrivateKey, true);
