@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2016 42Gears Mobility Systems                          *
+ * Copyright 2017 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -9,7 +9,6 @@
 
 using Amazon;
 using Amazon.EC2;
-using Amazon.EC2.Model;
 using Amazon.Runtime;
 using Amazon.Util;
 using EC2Connect.Code;
@@ -17,19 +16,9 @@ using EC2Connect.Popup;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace EC2Connect.Panels
 {
@@ -38,158 +27,164 @@ namespace EC2Connect.Panels
     /// </summary>
     public partial class EC2Instance : Grid
     {
-        private AmazonEC2Client EC2Client;
+        private string LastSelectedProfile = KeyStore.LastSelectedProfile;
+        public RegionEndpoint LastSelectedRegion
+        {
+            get
+            {
+                return AwsRegion.SelectedItem as RegionEndpoint;
+            }
+        }
+
+        public AmazonEC2Client AwsEC2Client
+        {
+            get
+            {
+                RegionEndpoint region = LastSelectedRegion;
+                if (string.IsNullOrWhiteSpace(LastSelectedProfile) || region == null)
+                {
+                    return null;
+                }
+                else
+                {
+                    DateTime t1 = DateTime.Now;
+                    AWSCredentials credentails = ProfileManager.GetAWSCredentials(LastSelectedProfile);
+                    AmazonEC2Client client = new AmazonEC2Client(credentails, region);
+                    DateTime t2 = DateTime.Now;
+                    Logger.Log("GetAWSCredentials took " + (t2 - t1).TotalMilliseconds + " ms");
+                    return client;
+                }
+            }
+        }
+
         public EC2Instance()
         {
             InitializeComponent();
         }
 
-        public void LoadProfile(string profileName)
+        public async Task LoadProfileAsync(string profileName, RegionEndpoint region)
         {
-            new Thread(LoadProfileAsync).Start(profileName);
-        }
-
-        private void LoadProfileAsync(object pName)
-        {
-            string profileName = pName as string;
-            if (!string.IsNullOrWhiteSpace(profileName))
+            if (region == null)
             {
+                region = LastSelectedRegion;
+            }
+            if (string.IsNullOrWhiteSpace(profileName) || region == null)
+            {
+                InstanceGrid.ItemsSource = new List<InstanceModel>();
+            }
+            else
+            {
+                LastSelectedProfile = profileName;
                 try
                 {
-                    AWSCredentials credentails = ProfileManager.GetAWSCredentials(profileName);
-                    EC2Client = new AmazonEC2Client(credentails, RegionEndpoint.USEast1);
-
-
-                    Dictionary<string, string> staticIPs = GetStaticIps(EC2Client);
-
-                    List<InstanceModel> allInstances = new List<InstanceModel>();
-
-                    var reservations = EC2Client.DescribeInstances().Reservations;
-                    if (reservations != null && reservations.Count > 0)
+                    InstanceGrid.ItemsSource = new List<InstanceModel>();
+                    List<InstanceModel> allInstances;
+                    using (AmazonEC2Client client = AwsEC2Client)
                     {
-                        foreach (Reservation reservation in reservations)
+                        if (client != null)
                         {
-                            var instances = reservation.Instances;
-                            if (instances != null && instances.Count > 0)
-                            {
-                                foreach (Instance instance in instances)
-                                {
-                                    if (!string.IsNullOrWhiteSpace(instance.PublicIpAddress))
-                                    {
-                                        allInstances.Add(new InstanceModel(instance));
-                                    }
-                                    else if(staticIPs.ContainsKey(instance.InstanceId))
-                                    {
-                                        instance.PublicIpAddress = staticIPs[instance.InstanceId];
-                                        allInstances.Add(new InstanceModel(instance));
-                                    }
-                                }
-                            }
+                            allInstances = await Utility.GetInstanceListAsync(client);
+                        }
+                        else
+                        {
+                            allInstances = null;
                         }
                     }
 
-                    if (allInstances.Count > 0)
+                    if (allInstances != null && allInstances.Count > 0)
                     {
-                        Dispatcher.BeginInvoke(new Action(() => LoadGrid(allInstances)));
+                        LoadGrid(allInstances);
+                        KeyStore.LastSelectedProfile = LastSelectedProfile;
+                        KeyStore.LastSelectedRegion = AwsRegion.SelectedIndex;
+                    }
+                    else
+                    {
+                        MessageBox.Show("No instances present in account " + profileName + " " + region);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Dispatcher.BeginInvoke(new Action(() => MessageBox.Show(ex.Message, ex.GetType().FullName)));
+                    MessageBox.Show(ex.Message, ex.GetType().FullName);
                 }
             }
-        }
-
-        private Dictionary<string, string> GetStaticIps(AmazonEC2Client eC2Client)
-        {
-            List <Address> addresses =  eC2Client.DescribeAddresses().Addresses;
-            Dictionary<string, string> staticIPs = new Dictionary<string, string>();
-            if (addresses!=null && addresses.Count>0)
-            {
-                foreach(Address address in addresses)
-                {
-                    if(!string.IsNullOrWhiteSpace(address.PublicIp) && !string.IsNullOrWhiteSpace(address.InstanceId))
-                    {
-                        staticIPs.Add(address.InstanceId, address.PublicIp);
-                    }
-                }
-            }
-            return staticIPs;
         }
 
         private void LoadGrid(List<InstanceModel> instances)
         {
+            DateTime t1 = DateTime.Now;
             if (instances != null && instances.Count > 0)
             {
                 InstanceGrid.ItemsSource = instances;
             }
+            DateTime t2 = DateTime.Now;
+            Debug.WriteLine("LoadGrid took " + (t2 - t1).TotalMilliseconds + " ms");
         }
 
-        private void Rdp_Click(object sender, RoutedEventArgs e)
+        private async void Rdp_Click(object sender, RoutedEventArgs e)
         {
             InstanceModel item = InstanceGrid.SelectedItem as InstanceModel;
-            if (item != null && EC2Client!=null)
+            if (item != null)
             {
-                new Thread(Rdp_Async).Start(item);
-            }
-        }
-
-        private void Rdp_Async(object instance)
-        {
-            try
-            {
-                InstanceModel item = instance as InstanceModel;
-                if (item != null && EC2Client != null)
+                using (AmazonEC2Client ec2Client = AwsEC2Client)
                 {
-                    Utility.AllowPort(EC2Client, item.AmazonInstance, Utility.PublicIPs, "TCP", 3389);
-
-                    // TODO: FixMe
-                    Dispatcher.BeginInvoke((Action)(() =>
+                    if (ec2Client != null)
                     {
-                        try
+                        string errorMessage = await Utility.RdpAsync(ec2Client, item).ConfigureAwait(continueOnCapturedContext: false);
+                        if (!string.IsNullOrWhiteSpace(errorMessage))
                         {
-                            Utility.DoRDP(EC2Client, item.AmazonInstance);
+                            MessageBox.Show(errorMessage);
                         }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine(ex.Message);
-                        }
-                    }));
+                    }
                 }
             }
-            catch (Exception ex)
+        }
+
+        private async void Ssh_Click(object sender, RoutedEventArgs e)
+        {
+            InstanceModel item = InstanceGrid.SelectedItem as InstanceModel;
+            if (item != null)
             {
-                Console.WriteLine(ex.Message);
+                using (AmazonEC2Client ec2Client = AwsEC2Client)
+                {
+                    if (ec2Client != null)
+                    {
+                        await Utility.AllowPorts(ec2Client, item.AmazonInstance, Utility.PublicIPs, "TCP", 22);
+                        string errorMessage = await Utility.DoSSH(item.AmazonInstance);
+                        if (!string.IsNullOrWhiteSpace(errorMessage))
+                        {
+                            MessageBox.Show(errorMessage);
+                        }
+                    }
+                }
             }
         }
 
-        private void Ssh_Click(object sender, RoutedEventArgs e)
+        private async void Scp_Click(object sender, RoutedEventArgs e)
         {
             InstanceModel item = InstanceGrid.SelectedItem as InstanceModel;
-            if (item != null && EC2Client != null)
+            if (item != null)
             {
-                Utility.AllowPort(EC2Client, item.AmazonInstance, Utility.PublicIPs, "TCP", 22);
-                Utility.DoSSH(item.AmazonInstance);
-            }
-        }
-
-        private void Scp_Click(object sender, RoutedEventArgs e)
-        {
-            InstanceModel item = InstanceGrid.SelectedItem as InstanceModel;
-            if (item != null && EC2Client != null)
-            {
-                Utility.AllowPort(EC2Client, item.AmazonInstance, Utility.PublicIPs, "TCP", 22);
-                Utility.DoSCP(item.AmazonInstance);
+                using (AmazonEC2Client ec2Client = AwsEC2Client)
+                {
+                    if (ec2Client != null)
+                    {
+                        await Utility.AllowPorts(ec2Client, item.AmazonInstance, Utility.PublicIPs, "TCP", 22);
+                        string errorMessage = await Utility.DoSCP(item.AmazonInstance);
+                        if (!string.IsNullOrWhiteSpace(errorMessage))
+                        {
+                            MessageBox.Show(errorMessage);
+                        }
+                    }
+                }
             }
         }
 
         private void Port_Click(object sender, RoutedEventArgs e)
         {
             InstanceModel item = InstanceGrid.SelectedItem as InstanceModel;
-            if (item != null && EC2Client != null)
+            if (item != null)
             {
                 CustomPortDialogue dialogue = new CustomPortDialogue();
-                dialogue.EC2Client = EC2Client;
                 dialogue.AmazonInstance = item.AmazonInstance;
                 dialogue.ShowInTaskbar = false;
                 dialogue.SizeToContent = SizeToContent.WidthAndHeight;
@@ -198,6 +193,49 @@ namespace EC2Connect.Panels
                 dialogue.ResizeMode = ResizeMode.NoResize;
 
                 dialogue.ShowDialog();
+            }
+        }
+
+        private void ComboBox_Loaded(object sender, RoutedEventArgs e)
+        {
+            ComboBox regions = sender as ComboBox;
+            if (regions != null)
+            {
+                foreach (var region in RegionEndpoint.EnumerableAllRegions)
+                {
+                    regions.Items.Add(region);
+                }
+                regions.SelectedIndex = KeyStore.LastSelectedRegion;
+            }
+
+            LastSelectedProfile = KeyStore.LastSelectedProfile;
+        }
+
+        private void ComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            ComboBox regions = sender as ComboBox;
+            if (regions != null)
+            {
+                InstanceGrid.ItemsSource = new List<InstanceModel>();
+                Refresh_Click(sender, e);
+            }
+        }
+        
+
+        private async void Refresh_Click(object sender, RoutedEventArgs e)
+        {
+            await LoadProfileAsync(LastSelectedProfile, null);
+        }
+
+        private void InstanceGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            DataGrid grid = sender as DataGrid;
+            if(grid!=null)
+            {
+                if(grid.ActualHeight > grid.MinHeight)
+                {
+                    grid.MinHeight = grid.ActualHeight;
+                }
             }
         }
     }

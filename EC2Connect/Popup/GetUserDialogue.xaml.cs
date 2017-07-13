@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2016 42Gears Mobility Systems                          *
+ * Copyright 2017 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -36,7 +36,7 @@ namespace EC2Connect.Popup
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
-            this.DialogResult = true;
+            DialogResult = true;
         }
 
         private void RadioButton_Checked(object sender, RoutedEventArgs e)

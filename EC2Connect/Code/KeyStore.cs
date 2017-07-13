@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2016 42Gears Mobility Systems                          *
+ * Copyright 2017 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -9,13 +9,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.IsolatedStorage;
-using System.Linq;
 using System.Runtime.Serialization.Formatters.Binary;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EC2Connect.Code
 {
@@ -24,7 +20,7 @@ namespace EC2Connect.Code
         private static readonly Object syncronized = new Object();
         public static string GetPassword(string InstanceId)
         {
-            lock(syncronized)
+            lock (syncronized)
             {
                 Dictionary<string, string> settings = null;
                 try
@@ -36,7 +32,7 @@ namespace EC2Connect.Code
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine(ex);
+                    Logger.Log("Cannot fetch password", ex);
                 }
                 if (settings != null && settings.ContainsKey(InstanceId))
                 {
@@ -48,7 +44,7 @@ namespace EC2Connect.Code
 
         public static void SetPassword(string InstanceId, string password)
         {
-            lock(syncronized)
+            lock (syncronized)
             {
                 Dictionary<string, string> settings = null;
                 try
@@ -60,14 +56,14 @@ namespace EC2Connect.Code
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine(ex);
+                    Logger.Log("Cannot save password", ex);
                 }
-                if(settings==null)
+                if (settings == null)
                 {
                     settings = new Dictionary<string, string>();
                 }
 
-                if(settings.ContainsKey(InstanceId))
+                if (settings.ContainsKey(InstanceId))
                 {
                     settings[InstanceId] = password;
                 }
@@ -79,6 +75,49 @@ namespace EC2Connect.Code
                 {
                     new BinaryFormatter().Serialize(stream, settings);
                 }
+            }
+        }
+        
+        public static int LastSelectedRegion
+        {
+            get
+            {
+                try
+                {
+                    string getPassword = GetPassword("LAST_SELECTED_REGION");
+                    if (!string.IsNullOrWhiteSpace(getPassword))
+                    {
+                        return int.Parse(getPassword);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("Cannot fetch LAST_SELECTED_REGION", ex);
+                }
+                return 0;
+            }
+
+            set
+            {
+                SetPassword("LAST_SELECTED_REGION", value.ToString());
+            }
+        }
+
+        public static string LastSelectedProfile
+        {
+            get
+            {
+                string profileName = GetPassword("LAST_SELECTED_PROFILE");
+                if (!string.IsNullOrWhiteSpace(profileName))
+                {
+                    return profileName;
+                }
+                return string.Empty;
+            }
+
+            set
+            {
+                SetPassword("LAST_SELECTED_PROFILE", value);
             }
         }
     }

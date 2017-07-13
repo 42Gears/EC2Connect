@@ -1,14 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-/********************************************************************
- * Copyright 2016 42Gears Mobility Systems                          *
+﻿/********************************************************************
+ * Copyright 2017 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -16,10 +7,7 @@ using System.Windows.Documents;
  *     http://www.apache.org/licenses/LICENSE-2.0                   *
  ********************************************************************/
 
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
+using System.Windows;
 
 namespace EC2Connect.Popup
 {

@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2016 42Gears Mobility Systems                          *
+ * Copyright 2017 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -7,22 +7,10 @@
  *     http://www.apache.org/licenses/LICENSE-2.0                   *
  ********************************************************************/
 
-using Amazon.EC2;
 using Amazon.EC2.Model;
 using EC2Connect.Code;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 
 namespace EC2Connect.Popup
 {
@@ -61,15 +49,17 @@ namespace EC2Connect.Popup
                 return null;
             }
         }
-
-        public AmazonEC2Client EC2Client { get; set; }
         public Instance AmazonInstance { get; set; }
 
-        private void Button_Click(object sender, RoutedEventArgs e)
+        private async void Button_Click(object sender, RoutedEventArgs e)
         {
-            if (Port > 0 && !string.IsNullOrWhiteSpace(Type) && EC2Client != null && AmazonInstance != null)
+            if (Port > 0 && !string.IsNullOrWhiteSpace(Type) && AmazonInstance != null)
             {
-                Utility.AllowPort(EC2Client, AmazonInstance, Utility.PublicIPs, Type, Port);
+                using (var ec2Client = ((MainWindow)Application.Current.MainWindow).MainGrid.AwsEC2Client)
+                {
+                    await Utility.AllowPorts(ec2Client, AmazonInstance, Utility.PublicIPs, Type, Port);
+                }
+                    
             }
             DialogResult = true;
         }

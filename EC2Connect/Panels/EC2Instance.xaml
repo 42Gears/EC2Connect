@@ -1,4 +1,4 @@
-﻿<!-- <copyright company="42Gears Mobility Systems" year="2016">
+﻿<!-- <copyright company="42Gears Mobility Systems" year="2017">
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -15,20 +15,25 @@ You may obtain a copy of the License at
     </Grid.RowDefinitions>
 
     <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto" />
-        <ColumnDefinition Width="Auto" />
-        <ColumnDefinition Width="Auto" />
-        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="2*" />
     </Grid.ColumnDefinitions>
 
-    <Button Grid.Row="0" Grid.Column="0" Content="Remote Desktop" Margin="10" Padding="10" Click="Rdp_Click" IsEnabled="{Binding ElementName=InstanceGrid, Path=SelectedItems.Count}" />
-    <Button Grid.Row="0" Grid.Column="1" Content="Secure Shell" Margin="10" Padding="10" Click="Ssh_Click" IsEnabled="{Binding ElementName=InstanceGrid, Path=SelectedItems.Count}" />
-    <Button Grid.Row="0" Grid.Column="2" Content="Secure Copy" Margin="10" Padding="10" Click="Scp_Click" IsEnabled="{Binding ElementName=InstanceGrid, Path=SelectedItems.Count}" />
-    <Button Grid.Row="0" Grid.Column="3" Content="Custom Port" Margin="10" Padding="10" Click="Port_Click" IsEnabled="{Binding ElementName=InstanceGrid, Path=SelectedItems.Count}" />
+    
+    <Button Grid.Row="0" Grid.Column="0" Content="Remote Desktop" MinWidth="64" Margin="3" Padding="3" Click="Rdp_Click" IsEnabled="{Binding ElementName=InstanceGrid, Path=SelectedItems.Count}" />
+    <Button Grid.Row="0" Grid.Column="1" Content="Secure Shell" MinWidth="64" Margin="3" Padding="3" Click="Ssh_Click" IsEnabled="{Binding ElementName=InstanceGrid, Path=SelectedItems.Count}" />
+    <Button Grid.Row="0" Grid.Column="2" Content="Secure Copy" MinWidth="64" Margin="3" Padding="3" Click="Scp_Click" IsEnabled="{Binding ElementName=InstanceGrid, Path=SelectedItems.Count}" />
+    <Button Grid.Row="0" Grid.Column="3" Content="Custom Port" MinWidth="64" Margin="3" Padding="3" Click="Port_Click" IsEnabled="{Binding ElementName=InstanceGrid, Path=SelectedItems.Count}" />
+    <Button Grid.Row="0" Grid.Column="4" Content="Refresh" Margin="3" MinWidth="64" Padding="3" Click="Refresh_Click" />
+    <ComboBox Grid.Row="0" Grid.Column="5" Margin="3" Padding="3" MinWidth="128" Name="AwsRegion" SelectionChanged="ComboBox_SelectionChanged" Loaded="ComboBox_Loaded" />
 
-    <DataGrid x:Name="InstanceGrid" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4" Margin="10"
+    <DataGrid x:Name="InstanceGrid" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="6" Margin="10"
               AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
-              CanUserReorderColumns="False" IsReadOnly="True" FontSize="16">
+              CanUserReorderColumns="False" IsReadOnly="True" FontSize="16" SizeChanged="InstanceGrid_SizeChanged" >
         <DataGrid.Columns>
             <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="Auto" />
             <DataGridTextColumn Header="IpAdd" Binding="{Binding IpAdd}" Width="Auto" />

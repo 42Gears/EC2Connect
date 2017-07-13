@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2016 42Gears Mobility Systems                          *
+ * Copyright 2017 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -16,8 +16,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -25,6 +23,68 @@ namespace EC2Connect.Code
 {
     public static class Utility
     {
+        public static async Task<List<InstanceModel>> GetInstanceListAsync(AmazonEC2Client EC2Client)
+        {
+            return await FetchInstanceListAsync(EC2Client).ConfigureAwait(continueOnCapturedContext: false);
+        }
+        private static async Task<List<InstanceModel>> FetchInstanceListAsync(AmazonEC2Client EC2Client)
+        {
+            DateTime t1 = DateTime.Now;
+            Dictionary<string, string> staticIPs = await GetStaticIps(EC2Client);
+            List<InstanceModel> allInstances = new List<InstanceModel>();
+            DateTime tt1 = DateTime.Now;
+            DescribeInstancesResponse instancesResponse = await EC2Client.DescribeInstancesAsync();
+            DateTime tt2 = DateTime.Now;
+            Logger.Log("Time taken by DescribeInstancesAsync = " + (tt2 - tt1).TotalMilliseconds + " ms");
+            List<Reservation> reservations = instancesResponse.Reservations;
+            if (reservations != null && reservations.Count > 0)
+            {
+                foreach (Reservation reservation in reservations)
+                {
+                    var instances = reservation.Instances;
+                    if (instances != null && instances.Count > 0)
+                    {
+                        foreach (Instance instance in instances)
+                        {
+                            if (!string.IsNullOrWhiteSpace(instance.PublicIpAddress))
+                            {
+                                allInstances.Add(new InstanceModel(instance));
+                            }
+                            else if (staticIPs.ContainsKey(instance.InstanceId))
+                            {
+                                instance.PublicIpAddress = staticIPs[instance.InstanceId];
+                                allInstances.Add(new InstanceModel(instance));
+                            }
+                        }
+                    }
+                }
+            }
+            DateTime t2 = DateTime.Now;
+            Logger.Log("Time taken by GetInstanceList = " + (t2 - t1).TotalMilliseconds + " ms");
+            return allInstances;
+        }
+
+        private static async Task<Dictionary<string, string>> GetStaticIps(AmazonEC2Client eC2Client)
+        {
+            DateTime t1 = DateTime.Now;
+            DescribeAddressesResponse addressesResponse = await eC2Client.DescribeAddressesAsync();
+            HashSet<Address> addresses = new HashSet<Address>(addressesResponse.Addresses);
+            Dictionary<string, string> staticIPs = new Dictionary<string, string>();
+            if (addresses != null && addresses.Count > 0)
+            {
+                foreach (Address address in addresses)
+                {
+                    if (!string.IsNullOrWhiteSpace(address.PublicIp) && !string.IsNullOrWhiteSpace(address.InstanceId))
+                    {
+                        staticIPs.Add(address.InstanceId, address.PublicIp);
+                    }
+                }
+            }
+            DateTime t2 = DateTime.Now;
+            Logger.Log("Time taken by GetStaticIps = " + (t2 - t1).TotalMilliseconds + " ms");
+            return staticIPs;
+        }
+
         public static string GetInstnaceName(Instance instance)
         {
             try
@@ -37,11 +97,11 @@ namespace EC2Connect.Code
             }
         }
 
-        internal static void AllowPort(IAmazonEC2 ec2Client, Instance instance, string[] publicIPs, string proto, int port)
+        internal static async Task AllowPorts(IAmazonEC2 ec2Client, Instance instance, string[] publicIPs, string proto, int port)
         {
             if (publicIPs != null && publicIPs.Length > 0)
             {
-                foreach(string publicIP in publicIPs)
+                foreach (string publicIP in publicIPs)
                 {
                     AuthorizeSecurityGroupIngressRequest ingressRequest = new AuthorizeSecurityGroupIngressRequest();
                     ingressRequest.GroupId = instance.SecurityGroups[0].GroupId;
@@ -55,70 +115,87 @@ namespace EC2Connect.Code
 
                     try
                     {
-                        var res = ec2Client.AuthorizeSecurityGroupIngress(ingressRequest);
-                        Console.WriteLine("Allowing Port " + port + " for IP Address " + publicIP.Trim() + "/32");
+                        AuthorizeSecurityGroupIngressResponse res = await ec2Client.AuthorizeSecurityGroupIngressAsync(ingressRequest);
+                        Logger.Log("Allowing Port " + port + " for IP Address " + publicIP.Trim() + "/32");
                     }
                     catch
                     {
                         // Ignore //
                     }
                 }
-                //AuthorizeSecurityGroupIngressRequest ingressRequest = new AuthorizeSecurityGroupIngressRequest();
-                //ingressRequest.GroupId = instance.SecurityGroups[0].GroupId;
-
-                //publicIPs.ToList().ForEach(x =>
-                //{
-                //    ingressRequest.IpPermissions.Add(new IpPermission()
-                //    {
-                //        IpProtocol = proto,
-                //        FromPort = port,
-                //        ToPort = port,
-                //        IpRanges = new List<string>() { x.Trim() + "/32" }
-                //    });
-                //});
-
-                //try
-                //{
-                //    var res = ec2Client.AuthorizeSecurityGroupIngress(ingressRequest);
-                //    Console.WriteLine("Allowing Port " + port + " for IP Address " + string.Join(",", publicIPs));
-                //}
-                //catch(Exception ex)
-                //{
-                //    Debug.WriteLine(ex.Message);
-                //    // Ignore //
-                //}
             }
         }
 
-        public static void DoRDP(AmazonEC2Client ec2Client, Instance instance)
+        /// <summary>
+        /// White lists the current public IP and initiates RDP on the instance
+        /// </summary>
+        /// <returns>Error message if any, null otherwise</returns>
+        public static async Task<string> RdpAsync(AmazonEC2Client ec2Client, InstanceModel item)
+        {
+            try
+            {
+                if (item != null && ec2Client != null)
+                {
+                    await Utility.AllowPorts(ec2Client, item.AmazonInstance, Utility.PublicIPs, "TCP", 3389)
+                        .ConfigureAwait(continueOnCapturedContext: false);
+                    return await Utility.DoRDP(ec2Client, item.AmazonInstance);
+                }
+                else
+                {
+                    return "Invalid Configuration";
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log("RdpAsync error", ex);
+                return ex.Message;
+            }
+        }
+
+        public static async Task<string> DoRDP(AmazonEC2Client ec2Client, Instance instance)
         {
             string publicIP = instance.PublicIpAddress;
-            // remove existing key from credential manager
-            ExecuteCommandSync("cmd", string.Format("/c cmdkey /delete:TERMSRV/{0}", publicIP), false);
-
-            string pwd = GetPassword(ec2Client, instance, ".pem");
-            if (string.IsNullOrWhiteSpace(pwd))
+            if (!string.IsNullOrWhiteSpace(publicIP))
             {
-                MessageBox.Show("Empty Password");
+                // remove existing key from credential manager
+                await Task.Run(() =>
+                    ExecuteCommandSync("cmd", string.Format("/c cmdkey /delete:TERMSRV/{0}", publicIP), false))
+                    .ConfigureAwait(continueOnCapturedContext: false);
+
+                string pwd = await GetPassword(ec2Client, instance, ".pem");
+                if (string.IsNullOrWhiteSpace(pwd))
+                {
+                    return "Empty Password";
+                }
+                else
+                {
+                    await Task.Run(() =>
+                        ExecuteCommandSync("cmd", string.Format("/c cmdkey /generic:TERMSRV/{0} /user: Administrator /pass: \"{1}\"", publicIP, pwd), false))
+                        .ConfigureAwait(continueOnCapturedContext: false);
+
+                    // Create mstsc file
+                    string tempRdpFile = GetTempFilePathWithExtension(".rdp");
+                    File.WriteAllText(tempRdpFile, "auto connect:i:1" + Environment.NewLine +
+                        "full address:s:" + publicIP + Environment.NewLine +
+                        "username:s:Administrator" + Environment.NewLine + "authentication level:i:0");
+
+                    await Task.Run(() =>
+                        ExecuteCommandSync("mstsc", tempRdpFile, true))
+                        .ConfigureAwait(continueOnCapturedContext: false);
+                }
             }
             else
             {
-                ExecuteCommandSync("cmd", string.Format("/c cmdkey /generic:TERMSRV/{0} /user: Administrator /pass: \"{1}\"", publicIP, pwd), false);
-
-                // Create mstsc file
-                string tempRdpFile = GetTempFilePathWithExtension(".rdp");
-                File.WriteAllText(tempRdpFile, "auto connect:i:1" + Environment.NewLine +
-                    "full address:s:" + publicIP + Environment.NewLine +
-                    "username:s:Administrator" + Environment.NewLine + "authentication level:i:0");
-                ExecuteCommandSync("mstsc", tempRdpFile, true);
+                return "Cannot fetch public IP for this instance";
             }
+            return null;
         }
 
         private static void ExecuteCommandSync(string command, string arguments, bool useBackground)
         {
             try
             {
-                System.Diagnostics.ProcessStartInfo procStartInfo = new System.Diagnostics.ProcessStartInfo(command, arguments);
+                ProcessStartInfo procStartInfo = new ProcessStartInfo(command, arguments);
                 if (useBackground)
                 {
                     procStartInfo.WindowStyle = ProcessWindowStyle.Hidden;
@@ -127,73 +204,91 @@ namespace EC2Connect.Code
                 procStartInfo.RedirectStandardOutput = false;
                 procStartInfo.UseShellExecute = false;
                 procStartInfo.CreateNoWindow = true;
-                System.Diagnostics.Process proc = new System.Diagnostics.Process();
+                Process proc = new Process();
                 proc.StartInfo = procStartInfo;
                 proc.Start();
-                string result = proc.StandardOutput.ReadToEnd();
-                Console.WriteLine(result);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex);
+                Logger.Log("Error in command line execution", ex);
             }
         }
 
         private static string GetPasswordFromUserOrStore(string instanceId, string dialogMessage)
         {
-            string password = KeyStore.GetPassword(instanceId);
-            if (string.IsNullOrWhiteSpace(password))
-            {
-                AskPassword dialogue = new AskPassword();
-                dialogue.ShowInTaskbar = false;
-                dialogue.SizeToContent = SizeToContent.WidthAndHeight;
-                dialogue.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-                dialogue.WindowStyle = WindowStyle.SingleBorderWindow;
-                dialogue.ResizeMode = ResizeMode.NoResize;
-
-                dialogue.DisplayMessage = dialogMessage;
-                bool? dialogResult = dialogue.ShowDialog();
-                if (dialogResult != null && (bool)dialogResult)
-                {
-                    string userPassword = dialogue.ManualPassword;
-                    if (!string.IsNullOrWhiteSpace(userPassword))
-                    {
-                        KeyStore.SetPassword(instanceId, userPassword);
-                        return userPassword;
-                    }
-                }
-            }
-            else
-            {
-                return password;
-            }
-            return null;
-        }
-
-        private static string GetPassword(AmazonEC2Client ec2Client, Instance instance, string extension)
-        {
             try
             {
-                GetPasswordDataRequest req = new GetPasswordDataRequest(instance.InstanceId);
-                GetPasswordDataResponse resp = ec2Client.GetPasswordData(req);
-                if (!string.IsNullOrWhiteSpace(resp.PasswordData))
+                string password = KeyStore.GetPassword(instanceId);
+                if (string.IsNullOrWhiteSpace(password))
                 {
-                    if (!File.Exists(instance.KeyName + extension))
+                    AskPassword dialogue = new AskPassword();
+                    dialogue.ShowInTaskbar = false;
+                    dialogue.SizeToContent = SizeToContent.WidthAndHeight;
+                    dialogue.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                    dialogue.WindowStyle = WindowStyle.SingleBorderWindow;
+                    dialogue.ResizeMode = ResizeMode.NoResize;
+
+                    dialogue.DisplayMessage = dialogMessage;
+                    bool? dialogResult = dialogue.ShowDialog();
+                    if (dialogResult != null && (bool)dialogResult)
                     {
-                        return GetPasswordFromUserOrStore(instance.InstanceId, "The File " + instance.KeyName + extension + " does not exist.");
+                        string userPassword = dialogue.ManualPassword;
+                        if (!string.IsNullOrWhiteSpace(userPassword))
+                        {
+                            KeyStore.SetPassword(instanceId, userPassword);
+                            return userPassword;
+                        }
                     }
-                    return resp.GetDecryptedPassword(File.ReadAllText(instance.KeyName + ".pem").Trim());
                 }
                 else
                 {
-                    return GetPasswordFromUserOrStore(instance.InstanceId, "Password not available with Amazon");
+                    return password;
                 }
             }
             catch (Exception ex)
             {
-                GetPasswordFromUserOrStore(instance.InstanceId, "Cannot fetch password: " + ex.Message);
+                Logger.Log("Error in GetPasswordFromUserOrStore", ex);
             }
-            return string.Empty;
+            return null;
+        }
+
+        private static async Task<string> GetPassword(AmazonEC2Client ec2Client, Instance instance, string extension)
+        {
+            try
+            {
+                string storePassword = KeyStore.GetPassword(instance.InstanceId);
+                if (string.IsNullOrWhiteSpace(storePassword))
+                {
+                    // Password is not present in store //
+                    // Get it from AWS //
+
+                    GetPasswordDataRequest req = new GetPasswordDataRequest(instance.InstanceId);
+                    GetPasswordDataResponse resp = await ec2Client.GetPasswordDataAsync(req);
+                    if (!string.IsNullOrWhiteSpace(resp.PasswordData))
+                    {
+                        if (!File.Exists(instance.KeyName + extension))
+                        {
+                            return GetPasswordFromUserOrStore(instance.InstanceId, "The File " + instance.KeyName + extension + " does not exist.");
+                        }
+                        else
+                        {
+                            return resp.GetDecryptedPassword(File.ReadAllText(instance.KeyName + ".pem").Trim());
+                        }
+                    }
+                    else
+                    {
+                        return GetPasswordFromUserOrStore(instance.InstanceId, "Password not available with Amazon");
+                    }
+                }
+                else
+                {
+                    return storePassword;
+                }
+            }
+            catch (Exception ex)
+            {
+                return GetPasswordFromUserOrStore(instance.InstanceId, "Cannot fetch password: " + ex.Message);
+            }
         }
 
         private static string GetTempFilePathWithExtension(string extension)
@@ -216,28 +311,34 @@ namespace EC2Connect.Code
             }
         }
 
-        private static string[] GetAllPublicIp(string[] urls)
+        private static async Task<string[]> GetAllPublicIp(string[] urls)
         {
-            System.Net.ServicePointManager.DefaultConnectionLimit = urls.Length * 2;
+            ServicePointManager.DefaultConnectionLimit = urls.Length * 2;
             SortedSet<string> allIps = new SortedSet<string>();
-            Parallel.ForEach(urls, x =>
+            List<Task<string>> tasks = new List<Task<string>>();
+            foreach (string url in urls)
             {
-                string externalip = FetchPublicIp(x);
-                if (!string.IsNullOrWhiteSpace(externalip))
+                tasks.Add(FetchPublicIp(url));
+            }
+            string[] ips = await Task.WhenAll(tasks);
+
+            foreach (string ip in ips)
+            {
+                if(!string.IsNullOrWhiteSpace(ip))
                 {
-                    allIps.Add(externalip);
+                    allIps.Add(ip);
                 }
-            });
+            }
             return allIps.ToArray();
         }
 
-        internal static void PublicIpWatcher()
+        internal static async Task PublicIpWatcher()
         {
-            while(true)
+            while (true)
             {
                 try
                 {
-                    string[] newIPs = GetAllPublicIp(IpProviders);
+                    string[] newIPs = await GetAllPublicIp(IpProviders);
                     if (newIPs != null && newIPs.Length > 0)
                     {
                         if (_publicIPs == null || _publicIPs.Length == 0)
@@ -257,28 +358,22 @@ namespace EC2Connect.Code
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.Message);
+                    Logger.Log("PublicIpWatcher error", ex);
                 }
-                Thread.Sleep(1024 * 64 * 4);    // ~ 4 minutes
+                await Task.Delay(1024);    // ~ 1 minutes
             }
         }
-
-        public delegate void OnPublicIPChanged();
-        public static event OnPublicIPChanged PublicIPChangedListeners;
 
         private static void OnPublicIPsUpdated(string[] newPublicIps)
         {
-            if(newPublicIps!=null && newPublicIps.Length > 0)
+            if (newPublicIps != null && newPublicIps.Length > 0)
             {
                 _publicIPs = newPublicIps;
-                if(PublicIPChangedListeners!=null)
-                {
-                    PublicIPChangedListeners();
-                }
+                ((MainWindow)Application.Current.MainWindow).OnIPChanged();
             }
         }
 
-        private static string FetchPublicIp(string providerUrl)
+        private static async Task<string> FetchPublicIp(string providerUrl)
         {
             string externalip;
             try
@@ -286,19 +381,19 @@ namespace EC2Connect.Code
                 using (WebClient httpClient = new WebClient())
                 {
                     httpClient.Proxy = null;
-                    externalip = httpClient.DownloadStringTaskAsync(providerUrl).Result;
+                    externalip = await httpClient.DownloadStringTaskAsync(providerUrl);
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex);
+                Logger.Log("FetchPublicIp error", ex);
                 externalip = null;
             }
 
             if (!string.IsNullOrWhiteSpace(externalip))
             {
-                System.Net.IPAddress ip;
-                if (System.Net.IPAddress.TryParse(externalip.Trim(), out ip))
+                IPAddress ip;
+                if (IPAddress.TryParse(externalip.Trim(), out ip))
                 {
                     return ip.ToString();
                 }
@@ -306,23 +401,22 @@ namespace EC2Connect.Code
             return null;
         }
 
-        internal static void DoSSH(Instance instance)
+        internal static async Task<string> DoSSH(Instance instance)
         {
-            DoSSHorSCP(instance, "SSH");
+            return await DoSSHorSCP(instance, "SSH");
         }
 
-        internal static void DoSCP(Instance instance)
+        internal static async Task<string> DoSCP(Instance instance)
         {
-            DoSSHorSCP(instance, "SCP");
+            return await DoSSHorSCP(instance, "SCP");
         }
 
-        private static void DoSSHorSCP(Instance instance, string command)
+        private static async Task<string> DoSSHorSCP(Instance instance, string command)
         {
             string PrivateKey = instance.KeyName + ".ppk";
             if (!File.Exists(PrivateKey))
             {
-                MessageBox.Show("The File " + PrivateKey + " does not exist.\nPlease create this file and try again.");
-                return;
+                return "The File " + PrivateKey + " does not exist.\nPlease create this file and try again.";
             }
 
             string userName = LinuxUser.GetUser(instance.InstanceId);
@@ -350,13 +444,18 @@ namespace EC2Connect.Code
                 string login = userName + "@" + instance.PublicIpAddress;
                 if (command.Equals("SSH"))
                 {
-                    ExecuteCommandSync("putty.exe", "-ssh " + login + " -i " + PrivateKey, true);
+                    await Task.Run(() =>
+                    ExecuteCommandSync("putty.exe", "-ssh " + login + " -i " + PrivateKey, true))
+                    .ConfigureAwait(continueOnCapturedContext: false);
                 }
                 else if (command.Equals("SCP"))
                 {
-                    ExecuteCommandSync("WinSCP.exe", "scp://" + login + " /privatekey=" + PrivateKey, true);
+                    await Task.Run(() =>
+                    ExecuteCommandSync("WinSCP.exe", "scp://" + login + " /privatekey=" + PrivateKey, true))
+                    .ConfigureAwait(continueOnCapturedContext: false);
                 }
             }
+            return null;
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿<!-- <copyright company="42Gears Mobility Systems" year="2016">
+﻿<!-- <copyright company="42Gears Mobility Systems" year="2017">
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -23,17 +23,17 @@ You may obtain a copy of the License at
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <TextBlock Grid.Row="0" Grid.Column="0" Text="Profile Name"  Margin="10" VerticalAlignment="Center" />
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="Access Id" Margin="10" VerticalAlignment="Center" />
-        <TextBlock Grid.Row="2" Grid.Column="0" Text="Secret Key" Margin="10" VerticalAlignment="Center" />
-        <TextBlock Grid.Row="3" Grid.Column="0" Text="AWS Region" Margin="10" VerticalAlignment="Center" />
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="AWS Region" Margin="10" VerticalAlignment="Center" />
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Profile Name"  Margin="10" VerticalAlignment="Center" />
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="Access Id" Margin="10" VerticalAlignment="Center" />
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="Secret Key" Margin="10" VerticalAlignment="Center" />
 
-        <TextBox x:Name="ProfileName" Grid.Row="0" Grid.Column="1" Width="256" Margin="10" VerticalAlignment="Center" TextChanged="TextBox_TextChanged" />
-        <TextBox x:Name="AccessId" Grid.Row="1" Grid.Column="1" Width="256" Margin="10" VerticalAlignment="Center" TextChanged="TextBox_TextChanged" />
-        <TextBox x:Name="SecretKey" Grid.Row="2" Grid.Column="1" Width="256" Margin="10" VerticalAlignment="Center" TextChanged="TextBox_TextChanged" />
-        <ComboBox x:Name="RegionsCombo" Grid.Row="3" Grid.Column="1" Width="256" Margin="10" VerticalAlignment="Center" HorizontalAlignment="Left" Loaded="Regions_Loaded" />
+        <ComboBox x:Name="RegionsCombo" Grid.Row="0" Grid.Column="1" Width="256" Margin="10" VerticalAlignment="Center" HorizontalAlignment="Left" Loaded="Regions_Loaded" />
+        <TextBox x:Name="ProfileName" Grid.Row="1" Grid.Column="1" Width="256" Margin="10" VerticalAlignment="Center" TextChanged="TextBox_TextChanged" />
+        <TextBox x:Name="AccessId" Grid.Row="2" Grid.Column="1" Width="256" Margin="10" VerticalAlignment="Center" TextChanged="TextBox_TextChanged" />
+        <TextBox x:Name="SecretKey" Grid.Row="3" Grid.Column="1" Width="256" Margin="10" VerticalAlignment="Center" TextChanged="TextBox_TextChanged" />
 
-        <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" />
+        <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" />
 
         <Grid Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2">
             <Grid.RowDefinitions>
@@ -48,7 +48,6 @@ You may obtain a copy of the License at
             <Button x:Name="TestButton" Grid.Column="0" Content="Test Credentails" Margin="10" Padding="10" IsEnabled="False" Click="Test_Click" />
             <Button x:Name="SaveButton" Grid.Column="1" Content="Save Account" Margin="10" Padding="10" IsEnabled="False" Click="Save_Click" />
             <Button Grid.Column="2" Content="Cancel" Margin="10" Padding="10" IsCancel="True" />
-
         </Grid>
     </Grid>
 </Window>

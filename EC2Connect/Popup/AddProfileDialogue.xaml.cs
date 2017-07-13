@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2016 42Gears Mobility Systems                          *
+ * Copyright 2017 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -12,18 +12,9 @@ using Amazon.EC2;
 using Amazon.Runtime;
 using Amazon.Util;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 
 namespace EC2Connect.Popup
 {
@@ -35,22 +26,16 @@ namespace EC2Connect.Popup
         public AddAccountDialogue()
         {
             InitializeComponent();
-            Loaded += AddAccountDialogue_Loaded;
         }
-
-        private void AddAccountDialogue_Loaded(object sender, RoutedEventArgs e)
-        {
-            
-        }
-
+        
         private void Regions_Loaded(object sender, RoutedEventArgs e)
         {
             ComboBox regions = sender as ComboBox;
             if(regions!=null)
             {
-                foreach(var r in Amazon.RegionEndpoint.EnumerableAllRegions)
+                foreach(var region in RegionEndpoint.EnumerableAllRegions)
                 {
-                    regions.Items.Add(new ComboBoxItem() {  Content  = r.DisplayName });
+                    regions.Items.Add(region);
                 }
                 regions.SelectedIndex = 0;
             }
@@ -62,7 +47,7 @@ namespace EC2Connect.Popup
             string accessId = AccessId.Text.Trim();
             string secretKey = SecretKey.Text.Trim();
             RegionEndpoint region = RegionsCombo.SelectedItem as RegionEndpoint;
-            if (region==null)
+            if (region == null)
             {
                 region = RegionEndpoint.USEast1;
             }
@@ -107,9 +92,8 @@ namespace EC2Connect.Popup
                 region = RegionEndpoint.USEast1;
             }
             ProfileManager.RegisterProfile(ProfileName.Text.Trim(), AccessId.Text.Trim(), SecretKey.Text.Trim());
-            //Properties.Settings.Default["aaa"] = new Dictionary<string, string>();
-            this.DialogResult = true;
-            this.Close();
+            DialogResult = true;
+            Close();
         }
 
         private void TextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -119,7 +103,5 @@ namespace EC2Connect.Popup
                                    !string.IsNullOrWhiteSpace(SecretKey.Text);
             SaveButton.IsEnabled = false;
         }
-
-        
     }
 }

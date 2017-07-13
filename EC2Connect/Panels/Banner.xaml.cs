@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2016 42Gears Mobility Systems                          *
+ * Copyright 2017 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -34,9 +34,6 @@ namespace EC2Connect.Panels
     /// </summary>
     public partial class Banner : Grid
     {
-        public delegate void OnProfileChanged(string profileName);
-        public event OnProfileChanged ProfileChangedListeners;
-
         public Banner()
         {
             InitializeComponent();
@@ -82,7 +79,7 @@ namespace EC2Connect.Panels
             AccountManagement.Items.Add(manage);
         }
 
-        private void AccountManagement_SelectionChanged(object sender, RoutedEventArgs e)
+        private async void AccountManagement_SelectionChanged(object sender, RoutedEventArgs e)
         {
             MenuItem item = sender as MenuItem;
             if (item != null)
@@ -90,10 +87,8 @@ namespace EC2Connect.Panels
                 string profile = item.Header as string;
                 if (!string.IsNullOrWhiteSpace(profile))
                 {
-                    if (ProfileChangedListeners != null)
-                    {
-                        ProfileChangedListeners(profile);
-                    }
+
+                    await (Application.Current.MainWindow as MainWindow).MainGrid.LoadProfileAsync(profile, null);
                 }
             }
         }
