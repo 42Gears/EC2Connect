@@ -129,7 +129,7 @@ namespace EC2Connect.Panels
                 {
                     if (ec2Client != null)
                     {
-                        string errorMessage = await Utility.RdpAsync(ec2Client, item).ConfigureAwait(continueOnCapturedContext: false);
+                        string errorMessage = await Utility.RdpAsync(ec2Client, item);
                         if (!string.IsNullOrWhiteSpace(errorMessage))
                         {
                             MessageBox.Show(errorMessage);

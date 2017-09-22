@@ -136,8 +136,7 @@ namespace EC2Connect.Code
             {
                 if (item != null && ec2Client != null)
                 {
-                    await Utility.AllowPorts(ec2Client, item.AmazonInstance, Utility.PublicIPs, "TCP", 3389)
-                        .ConfigureAwait(continueOnCapturedContext: false);
+                    await Utility.AllowPorts(ec2Client, item.AmazonInstance, Utility.PublicIPs, "TCP", 3389);
                     return await Utility.DoRDP(ec2Client, item.AmazonInstance);
                 }
                 else
@@ -159,8 +158,7 @@ namespace EC2Connect.Code
             {
                 // remove existing key from credential manager
                 await Task.Run(() =>
-                    ExecuteCommandSync("cmd", string.Format("/c cmdkey /delete:TERMSRV/{0}", publicIP), false))
-                    .ConfigureAwait(continueOnCapturedContext: false);
+                    ExecuteCommandSync("cmd", string.Format("/c cmdkey /delete:TERMSRV/{0}", publicIP), false));
 
                 string pwd = await GetPassword(ec2Client, instance, ".pem");
                 if (string.IsNullOrWhiteSpace(pwd))
