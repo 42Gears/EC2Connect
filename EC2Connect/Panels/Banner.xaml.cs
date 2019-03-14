@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2017 42Gears Mobility Systems                          *
+ * Copyright 2019 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -9,6 +9,7 @@
 
 using Amazon.EC2;
 using Amazon.Runtime;
+using Amazon.Runtime.CredentialManagement;
 using Amazon.Util;
 using EC2Connect.Popup;
 using System;
@@ -58,8 +59,9 @@ namespace EC2Connect.Panels
 
         private void RefreshMenuItems()
         {
+            NetSDKCredentialsFile netSDKFile = new NetSDKCredentialsFile();
             AccountManagement.Items.Clear();
-            var profiles = ProfileManager.ListProfileNames();
+            List<string> profiles = netSDKFile.ListProfileNames();
             if (profiles != null || profiles.Count() > 0)
             {
                 foreach (string profile in profiles)

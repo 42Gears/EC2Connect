@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2017 42Gears Mobility Systems                          *
+ * Copyright 2019 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -10,6 +10,7 @@
 using Amazon;
 using Amazon.EC2;
 using Amazon.Runtime;
+using Amazon.Runtime.CredentialManagement;
 using Amazon.Util;
 using EC2Connect.Code;
 using EC2Connect.Popup;
@@ -27,7 +28,15 @@ namespace EC2Connect.Panels
     /// </summary>
     public partial class EC2Instance : Grid
     {
-        private string LastSelectedProfile = KeyStore.LastSelectedProfile;
+        private string _lastSelectedProfileName = KeyStore.LastSelectedProfile;
+
+        public string LastSelectedProfile
+        {
+            get { return _lastSelectedProfileName; }
+            private set { _lastSelectedProfileName = value; }
+        }
+
+
         public RegionEndpoint LastSelectedRegion
         {
             get
@@ -47,12 +56,16 @@ namespace EC2Connect.Panels
                 }
                 else
                 {
-                    DateTime t1 = DateTime.Now;
-                    AWSCredentials credentails = ProfileManager.GetAWSCredentials(LastSelectedProfile);
-                    AmazonEC2Client client = new AmazonEC2Client(credentails, region);
-                    DateTime t2 = DateTime.Now;
-                    Logger.Log("GetAWSCredentials took " + (t2 - t1).TotalMilliseconds + " ms");
-                    return client;
+                    AWSCredentials awsCredentials = Utility.GetAWSCredentials(LastSelectedProfile);
+                    if (awsCredentials!=null)
+                    {
+                        AmazonEC2Client client = new AmazonEC2Client(awsCredentials, region);
+                        return client;
+                    }
+                    else
+                    {
+                        return null;
+                    }
                 }
             }
         }

@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2017 42Gears Mobility Systems                          *
+ * Copyright 2019 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -10,7 +10,9 @@
 using Amazon;
 using Amazon.EC2;
 using Amazon.Runtime;
+using Amazon.Runtime.CredentialManagement;
 using Amazon.Util;
+using EC2Connect.Code;
 using System;
 using System.Linq;
 using System.Windows;
@@ -51,7 +53,10 @@ namespace EC2Connect.Popup
             {
                 region = RegionEndpoint.USEast1;
             }
-            if (ProfileManager.ListProfileNames().Contains(ProfileName.Text.Trim()))
+
+            NetSDKCredentialsFile netSDKFile = new NetSDKCredentialsFile();
+
+            if (netSDKFile.ListProfileNames().Contains(profileName))
             {
                 MessageBox.Show("Profile Name already exists");
                 return;
@@ -59,28 +64,34 @@ namespace EC2Connect.Popup
 
             try
             {
-                ProfileManager.RegisterProfile(profileName, accessId, secretKey);
-                AWSCredentials credentails = ProfileManager.GetAWSCredentials(profileName);
+                netSDKFile.RegisterProfile(new CredentialProfile(profileName, new CredentialProfileOptions
+                {
+                    AccessKey = accessId,
+                    SecretKey = secretKey
+                }));
+
+                
+                AWSCredentials credentails = Utility.GetAWSCredentials(profileName);
                 AmazonEC2Client ec2 = new AmazonEC2Client(credentails, region);
                 ec2.DescribeAvailabilityZones();
                 ec2.DescribeRegions();
-                ProfileManager.UnregisterProfile(profileName);
+                netSDKFile.UnregisterProfile(profileName);
                 SaveButton.IsEnabled = true;
                 MessageBox.Show("Authorized!");
             }
             catch (AmazonEC2Exception ex)
             {
-                ProfileManager.UnregisterProfile(profileName);
+                netSDKFile.UnregisterProfile(profileName);
                 MessageBox.Show(ex.Message, "Invalid Credentials");
             }
             catch(Exception ex)
             {
-                ProfileManager.UnregisterProfile(profileName);
+                netSDKFile.UnregisterProfile(profileName);
                 MessageBox.Show(ex.Message, "No Internet");
             }
             finally
             {
-                ProfileManager.UnregisterProfile(profileName);
+                netSDKFile.UnregisterProfile(profileName);
             }
         }
 
@@ -91,7 +102,14 @@ namespace EC2Connect.Popup
             {
                 region = RegionEndpoint.USEast1;
             }
-            ProfileManager.RegisterProfile(ProfileName.Text.Trim(), AccessId.Text.Trim(), SecretKey.Text.Trim());
+            NetSDKCredentialsFile netSDKFile = new NetSDKCredentialsFile();
+
+            netSDKFile.RegisterProfile(new CredentialProfile(ProfileName.Text.Trim(), new CredentialProfileOptions
+            {
+                AccessKey = AccessId.Text.Trim(),
+                SecretKey = SecretKey.Text.Trim()
+            }));
+
             DialogResult = true;
             Close();
         }

@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2017 42Gears Mobility Systems                          *
+ * Copyright 2019 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -9,6 +9,8 @@
 
 using Amazon.EC2;
 using Amazon.EC2.Model;
+using Amazon.Runtime;
+using Amazon.Runtime.CredentialManagement;
 using EC2Connect.Popup;
 using System;
 using System.Collections.Generic;
@@ -97,6 +99,99 @@ namespace EC2Connect.Code
             }
         }
 
+        private static readonly string COMMENT = "EC2Connect on " + Environment.MachineName;
+        private static readonly Dictionary<string, string> CleanupSecurityGroups = new Dictionary<string, string>();
+
+        internal static void CleanUpAddedIPs(object ec2Client)
+        {
+            try
+            {
+                AmazonEC2Client client = ec2Client as AmazonEC2Client;
+                bool result = CleanUpNewIPs(client);
+                Debug.WriteLine("CleanUpNewIPs result = " + result);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("CleanUpNewIPs " + ex);
+            }
+        }
+
+        internal static bool CleanUpNewIPs(AmazonEC2Client ec2Client)
+        {
+            int count = 0;
+            string[] keys;
+
+            lock (CleanupSecurityGroups)
+            {
+                keys = CleanupSecurityGroups.Keys.ToArray();
+            }
+
+            if (keys!= null && keys.Length> 0)
+            {
+                foreach (string key in keys)
+                {
+                    bool result = RemoveFromFireWall(ec2Client, key, CleanupSecurityGroups[key]);
+                    Debug.WriteLine("Removed key : " + key + " = " + result);
+                    if(result)
+                    {
+                        count++;
+                    }
+                }
+            }
+            return count>0;
+        }
+
+        private static bool RemoveFromFireWall(AmazonEC2Client ec2Client, string GroupId, string profileName)
+        {
+            try
+            {
+                // Get Request
+                DescribeSecurityGroupsRequest describeRequest = new DescribeSecurityGroupsRequest();
+                describeRequest.GroupIds = new List<string>() { GroupId };
+                DescribeSecurityGroupsResponse describeResponse =  ec2Client.DescribeSecurityGroups(describeRequest);
+                // Delete Request
+                RevokeSecurityGroupIngressRequest ingressRequest = new RevokeSecurityGroupIngressRequest();
+                ingressRequest.GroupId = GroupId;
+                bool hasDeleteRequest = false;
+
+                if (describeResponse.SecurityGroups != null && describeResponse.SecurityGroups.Count > 0)
+                {
+                    foreach (SecurityGroup securityGrp in describeResponse.SecurityGroups)
+                    {
+                        if (securityGrp.IpPermissions != null && securityGrp.IpPermissions.Count > 0)
+                        {
+                            foreach (IpPermission ipPerm in securityGrp.IpPermissions)
+                            {
+                                if (ipPerm.Ipv4Ranges != null && ipPerm.Ipv4Ranges.Count > 0)
+                                {
+                                    foreach (IpRange ranger in ipPerm.Ipv4Ranges)
+                                    {
+                                        if (!string.IsNullOrWhiteSpace(ranger.Description) && ranger.Description.Equals(COMMENT))
+                                        {
+                                            ingressRequest.IpPermissions.Add(ipPerm);
+                                            hasDeleteRequest = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (hasDeleteRequest)
+                {
+                    RevokeSecurityGroupIngressResponse response = ec2Client.RevokeSecurityGroupIngress(ingressRequest);
+                    Debug.WriteLine("Deleteing From Firewall: " + response.ResponseMetadata.Metadata);
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+            }
+            return false;
+        }
+
         internal static async Task AllowPorts(IAmazonEC2 ec2Client, Instance instance, string[] publicIPs, string proto, int port)
         {
             if (publicIPs != null && publicIPs.Length > 0)
@@ -105,18 +200,32 @@ namespace EC2Connect.Code
                 {
                     AuthorizeSecurityGroupIngressRequest ingressRequest = new AuthorizeSecurityGroupIngressRequest();
                     ingressRequest.GroupId = instance.SecurityGroups[0].GroupId;
+
+                    IpRange newIp = new IpRange();
+                    newIp.CidrIp = publicIP.Trim() + "/32";
+                    newIp.Description = COMMENT;
+
+
                     ingressRequest.IpPermissions.Add(new IpPermission()
                     {
                         IpProtocol = proto,
                         FromPort = port,
                         ToPort = port,
-                        IpRanges = new List<string>() { publicIP.Trim() + "/32" }
+                        Ipv4Ranges = new List<IpRange>() { newIp }
                     });
 
                     try
                     {
                         AuthorizeSecurityGroupIngressResponse res = await ec2Client.AuthorizeSecurityGroupIngressAsync(ingressRequest);
                         Logger.Log("Allowing Port " + port + " for IP Address " + publicIP.Trim() + "/32");
+
+                        lock(CleanupSecurityGroups)
+                        {
+                            if (!CleanupSecurityGroups.ContainsKey(ingressRequest.GroupId))
+                            {
+                                CleanupSecurityGroups.Add(ingressRequest.GroupId, ((MainWindow)Application.Current.MainWindow).MainGrid.LastSelectedProfile);
+                            }
+                        }
                     }
                     catch
                     {
@@ -176,7 +285,10 @@ namespace EC2Connect.Code
                     File.WriteAllText(tempRdpFile, "auto connect:i:1" + Environment.NewLine +
                         "full address:s:" + publicIP + Environment.NewLine +
                         "username:s:Administrator" + Environment.NewLine + "authentication level:i:0");
-
+                    if(tempRdpFile.Contains(' '))
+                    {
+                        tempRdpFile = "\"" + tempRdpFile + "\"";
+                    }
                     await Task.Run(() =>
                         ExecuteCommandSync("mstsc", tempRdpFile, true))
                         .ConfigureAwait(continueOnCapturedContext: false);
@@ -452,6 +564,30 @@ namespace EC2Connect.Code
                     ExecuteCommandSync("WinSCP.exe", "scp://" + login + " /privatekey=" + PrivateKey, true))
                     .ConfigureAwait(continueOnCapturedContext: false);
                 }
+            }
+            return null;
+        }
+
+        public static AWSCredentials GetAWSCredentials(string profileName)
+        {
+            try
+            {
+                if(!string.IsNullOrWhiteSpace(profileName))
+                {
+                    var chain = new CredentialProfileStoreChain();
+                    AWSCredentials awsCredentials;
+                    if (chain.TryGetAWSCredentials(profileName, out awsCredentials))
+                    {
+                        if (awsCredentials != null)
+                        {
+                            return awsCredentials;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
             }
             return null;
         }

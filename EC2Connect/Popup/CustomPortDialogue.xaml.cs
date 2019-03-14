@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2017 42Gears Mobility Systems                          *
+ * Copyright 2019 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -7,6 +7,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0                   *
  ********************************************************************/
 
+using Amazon.EC2;
 using Amazon.EC2.Model;
 using EC2Connect.Code;
 using System.Windows;
@@ -55,7 +56,7 @@ namespace EC2Connect.Popup
         {
             if (Port > 0 && !string.IsNullOrWhiteSpace(Type) && AmazonInstance != null)
             {
-                using (var ec2Client = ((MainWindow)Application.Current.MainWindow).MainGrid.AwsEC2Client)
+                using (AmazonEC2Client ec2Client = ((MainWindow)Application.Current.MainWindow).MainGrid.AwsEC2Client)
                 {
                     await Utility.AllowPorts(ec2Client, AmazonInstance, Utility.PublicIPs, Type, Port);
                 }

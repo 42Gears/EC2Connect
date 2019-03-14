@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2017 42Gears Mobility Systems                          *
+ * Copyright 2019 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -7,8 +7,11 @@
  *     http://www.apache.org/licenses/LICENSE-2.0                   *
  ********************************************************************/
 
+using Amazon.EC2;
 using EC2Connect.Code;
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Threading;
 using System.Windows;
 using System.Windows.Input;
@@ -48,6 +51,24 @@ namespace EC2Connect
         private async void IpAddress_Loaded(object sender, RoutedEventArgs e)
         {
             await Utility.PublicIpWatcher();
+        }
+
+        private void Window_Closing(object sender, CancelEventArgs e)
+        {
+            try
+            {
+                using (AmazonEC2Client ec2Client = this.MainGrid.AwsEC2Client)
+                {
+                    new Thread(Utility.CleanUpAddedIPs)
+                    {
+                        IsBackground = false
+                    }.Start(ec2Client);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+            }
         }
     }
 }

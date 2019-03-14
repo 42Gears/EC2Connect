@@ -9,6 +9,7 @@ You may obtain a copy of the License at
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:panels="clr-namespace:EC2Connect.Panels"
+        Closing="Window_Closing"
         Title="EC2Connect" Height="Auto" Width="Auto" SizeToContent="WidthAndHeight">
     <Grid>
         <Grid.RowDefinitions>

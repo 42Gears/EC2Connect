@@ -1,5 +1,5 @@
 ﻿/********************************************************************
- * Copyright 2017 42Gears Mobility Systems                          *
+ * Copyright 2019 42Gears Mobility Systems                          *
  *                                                                  *
  * Licensed under the Apache License, Version 2.0 (the "License");  *
  * you may not use this file except in compliance with the License. *
@@ -7,6 +7,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0                   *
  ********************************************************************/
 
+using Amazon.Runtime.CredentialManagement;
 using Amazon.Util;
 using System;
 using System.Collections.Generic;
@@ -43,7 +44,8 @@ namespace EC2Connect.Popup
         private void RefreshAccountList()
         {
             AccountList.Items.Clear();
-            var profiles = ProfileManager.ListProfileNames();
+            NetSDKCredentialsFile netSDKFile = new NetSDKCredentialsFile();
+            List<string> profiles = netSDKFile.ListProfileNames();
             if (profiles != null || profiles.Count() > 0)
             {
                 foreach (string profile in profiles)
@@ -75,7 +77,8 @@ namespace EC2Connect.Popup
                 MessageBoxResult messageBoxResult = MessageBox.Show("Are you sure?", "Delete Confirmation", System.Windows.MessageBoxButton.YesNo);
                 if (messageBoxResult == MessageBoxResult.Yes)
                 {
-                    ProfileManager.UnregisterProfile(profile);
+                    NetSDKCredentialsFile netSDKFile = new NetSDKCredentialsFile();
+                    netSDKFile.UnregisterProfile(profile);
                 }
             }
             RefreshAccountList();
